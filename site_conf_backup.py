@@ -16,7 +16,8 @@ The script has 2 different steps:
 3) nackup all the objects to the json file. 
 '''
 #### PARAMETERS #####
-backup_file = "./org_conf_file.json"
+backup_root_folder = "backup"
+backup_file = "./site_conf_file.json"
 file_prefix = ".".join(backup_file.split(".")[:-1])
 session_file = "./session.py"
 
@@ -31,128 +32,116 @@ from mlib.__debug import Console
 console = Console(6)
 
 #### FUNCTIONS ####
+
+def _download_obj(m_func, obj_type, obj_txt):
+    print("Downloading {0}".format(obj_txt).ljust(79, "."), end="", flush=True)
+    try: 
+        res = m_func["result"]
+        if res:
+            obj_file = "{0}.json".format(obj_type)        
+            with open(obj_file, "w") as f:
+                json.dump(res, f)
+        print('\033[92m\u2714\033[0m')
+    except:
+        res = None
+        print('\033[31m\u2716\033[0m')
+    finally:
+        return res
+
+
 def _backup_wlan_portal(org_id, site_id, wlans):  
-    for wlan in wlans:     
-        if site_id == None:
-            portal_file_name = "%s_org_%s_wlan_%s.json" %(file_prefix, org_id, wlan["id"])
-            portal_image = "%s_org_%s_wlan_%s.png" %(file_prefix, org_id, wlan["id"])
-        else:
-            portal_file_name = "%s_org_%s_site_%s_wlan_%s.json" %(file_prefix, org_id, site_id, wlan["id"]) 
-            portal_image = "%s_org_%s_site_%s_wlan_%s.png" %(file_prefix, org_id, site_id, wlan["id"])
-        if "portal_template_url" in wlan: urllib.request.urlretrieve(wlan["portal_template_url"], portal_file_name)
-        if "portal_image" in wlan: urllib.request.urlretrieve(wlan["portal_image"], portal_image)
+    if wlans:
+        for wlan in wlans:     
+            if site_id == None:
+                portal_file_name = "{0}_wlan_{1}.json".format(file_prefix, wlan["id"])
+                portal_image = "{0}_wlan_{1}.png".format(file_prefix, wlan["id"])
+            else:
+                portal_file_name = "{0}_site_{1}_wlan_{2}.json".format(file_prefix, site_id, wlan["id"]) 
+                portal_image = "{0}_site_{1}_wlan_{2}.png".format(file_prefix, site_id, wlan["id"])
+            
+            if "portal_template_url" in wlan: 
+                print("Downloading portal template for WLAN {0} ".format(wlan["ssid"]).ljust(79, "."), end="", flush=True)
+                try:
+                    urllib.request.urlretrieve(wlan["portal_template_url"], portal_file_name)
+                    print('\033[92m\u2714\033[0m')
+                except:
+                    print('\033[31m\u2716\033[0m')
+            if "portal_image" in wlan: 
+                print("Downloading portal image for WLAN {0} ".format(wlan["ssid"]).ljust(79, "."), end="", flush=True)
+                try:
+                    urllib.request.urlretrieve(wlan["portal_image"], portal_image)
+                    print('\033[92m\u2714\033[0m')
+                except:
+                    print('\033[31m\u2716\033[0m')
     
 
+def _backup_site(mist_session, site_id, site_name, org_id):
+    print()
+    console.info("Download: processing site {0} ...".format(site_name))
+    print()
 
-def _backup_full_org(mist_session, org_id, org_name):
-    console.notice("ORG %s > Backup processing..." %(org_name))
-    backup = {}
-    backup["org"] = { "id": org_id}
-    console.info("ORG %s > Backuping info" %(org_name))
-    backup["org"]["data"] = mist_lib.requests.orgs.info.get(mist_session, org_id)["result"]
-    console.info("ORG %s > Backuping settings" %(org_name))
-    backup["org"]["settings"] = mist_lib.requests.orgs.settings.get(mist_session, org_id)["result"]
-    console.info("ORG %s > Backuping webhooks" %(org_name))
-    backup["org"]["webhooks"] = mist_lib.requests.orgs.webhooks.get(mist_session, org_id)["result"]
-    console.info("ORG %s > Backuping assetfilters" %(org_name))
-    backup["org"]["assetfilters"] = mist_lib.requests.orgs.assetfilters.get(mist_session, org_id)["result"]
-    console.info("ORG %s > Backuping alarmtemplates" %(org_name))
-    backup["org"]["alarmtemplates"] = mist_lib.requests.orgs.alarmtemplates.get(mist_session, org_id)["result"]
-    console.info("ORG %s > Backuping deviceprofiles" %(org_name))
-    backup["org"]["deviceprofiles"] = mist_lib.requests.orgs.deviceprofiles.get(mist_session, org_id)["result"]
-    console.info("ORG %s > Backuping mxclusters" %(org_name))
-    backup["org"]["mxclusters"] = mist_lib.requests.orgs.mxclusters.get(mist_session, org_id)["result"]
-    console.info("ORG %s > Backuping mxtunnels" %(org_name))
-    backup["org"]["mxtunnels"] = mist_lib.requests.orgs.mxtunnels.get(mist_session, org_id)["result"]
-    console.info("ORG %s > Backuping psks" %(org_name))
-    backup["org"]["psks"] = mist_lib.requests.orgs.psks.get(mist_session, org_id)["result"]
-    console.info("ORG %s > Backuping rftemplates" %(org_name))
-    backup["org"]["rftemplates"] = mist_lib.requests.orgs.rftemplates.get(mist_session, org_id)["result"]
-    console.info("ORG %s > Backuping networktemplates" %(org_name))
-    backup["org"]["rftemplates"] = mist_lib.requests.orgs.networktemplates.get(mist_session, org_id)["result"]
-    console.info("ORG %s > Backuping secpolicies" %(org_name))
-    backup["org"]["secpolicies"] = mist_lib.requests.orgs.secpolicies.get(mist_session, org_id)["result"]
-    console.info("ORG %s > Backuping sitegroups" %(org_name))
-    backup["org"]["sitegroups"] = mist_lib.requests.orgs.sitegroups.get(mist_session, org_id)["result"]
-    console.info("ORG %s > Backuping ssos" %(org_name))
-    backup["org"]["ssos"] = mist_lib.requests.orgs.ssos.get(mist_session, org_id)["result"]
-    console.info("ORG %s > Backuping ssoroles" %(org_name))
-    backup["org"]["ssoroles"] = mist_lib.requests.orgs.ssoroles.get(mist_session, org_id)["result"]
-    console.info("ORG %s > Backuping templates" %(org_name))
-    backup["org"]["templates"] = mist_lib.requests.orgs.templates.get(mist_session, org_id)["result"]
-    console.info("ORG %s > Backuping wlans" %(org_name))
-    backup["org"]["wlans"] = mist_lib.requests.orgs.wlans.get(mist_session, org_id)["result"]
-    console.info("ORG %s > Backuping captive web prortals" %(org_name))
-    _backup_wlan_portal(org_id, None, backup["org"]["wlans"])
-    console.info("ORG %s > Backuping wxrules" %(org_name))
-    backup["org"]["wxrules"] = mist_lib.requests.orgs.wxrules.get(mist_session, org_id)["result"]
-    console.info("ORG %s > Backuping wxtags" %(org_name))
-    backup["org"]["wxtags"] = mist_lib.requests.orgs.wxtags.get(mist_session, org_id)["result"]
-    console.info("ORG %s > Backuping wxtunnels" %(org_name))
-    backup["org"]["wxtunnels"] = mist_lib.requests.orgs.wxtunnels.get(mist_session, org_id)["result"]
+    _download_obj(mist_lib.requests.sites.settings.get(mist_session, site_id), "settings", "Site Settings")
 
-    backup["org"]["sites"] = []
+    info = _download_obj(mist_lib.requests.sites.info.get(mist_session, site_id), "info", "Site Info")
 
-    sites = mist_lib.requests.orgs.sites.get(mist_session, org_id)['result']
-    for site in sites:
-        console.info("ORG %s > SITE %s > Backup processing..." %(org_name, site["name"]))
-        console.info("ORG %s > SITE %s > Backuping assets" %(org_name, site["name"]))
-        assets = mist_lib.requests.sites.assets.get(mist_session, site["id"])["result"]
-        console.info("ORG %s > SITE %s > Backuping assetfilters" %(org_name, site["name"]))
-        assetfilters = mist_lib.requests.sites.assetfilters.get(mist_session, site["id"])["result"]
-        console.info("ORG %s > SITE %s > Backuping beacons" %(org_name, site["name"]))
-        beacons = mist_lib.requests.sites.beacons.get(mist_session, site["id"])["result"]
-        console.info("ORG %s > SITE %s > Backuping maps" %(org_name, site["name"]))
-        maps = mist_lib.requests.sites.maps.get(mist_session, site["id"])["result"]
-        console.info("ORG %s > SITE %s > Backuping psks" %(org_name, site["name"]))
-        psks = mist_lib.requests.sites.psks.get(mist_session, site["id"])["result"]
-        console.info("ORG %s > SITE %s > Backuping rssizones" %(org_name, site["name"]))
-        rssizones = mist_lib.requests.sites.rssizones.get(mist_session, site["id"])["result"]
-        console.info("ORG %s > SITE %s > Backuping settings" %(org_name, site["name"]))
-        settings = mist_lib.requests.sites.settings.get(mist_session, site["id"])["result"]
-        console.info("ORG %s > SITE %s > Backuping vbeacons" %(org_name, site["name"]))
-        vbeacons = mist_lib.requests.sites.vbeacons.get(mist_session, site["id"])["result"]
-        console.info("ORG %s > SITE %s > Backuping webhooks" %(org_name, site["name"]))
-        webhooks = mist_lib.requests.sites.webhooks.get(mist_session, site["id"])["result"]
-        console.info("ORG %s > SITE %s > Backuping wlans" %(org_name, site["name"]))
-        wlans = mist_lib.requests.sites.wlans.get(mist_session, site["id"])["result"]
-        console.info("ORG %s > SITE %s > Backuping captive web prortals" %(org_name, site["name"]))
-        _backup_wlan_portal(org_id, site["id"], wlans)
-        console.info("ORG %s > SITE %s > Backuping wxrules" %(org_name, site["name"]))
-        wxrules = mist_lib.requests.sites.wxrules.get(mist_session, site["id"])["result"]
-        console.info("ORG %s > SITE %s > Backuping wxtags" %(org_name, site["name"]))
-        wxtags = mist_lib.requests.sites.wxtags.get(mist_session, site["id"])["result"]
-        console.info("ORG %s > SITE %s > Backuping wxtunnels" %(org_name, site["name"]))
-        wxtunnels = mist_lib.requests.sites.wxtunnels.get(mist_session, site["id"])["result"]
-        console.info("ORG %s > SITE %s > Backuping zones" %(org_name, site["name"]))
-        zones = mist_lib.requests.sites.zones.get(mist_session, site["id"])["result"]
-        backup["org"]["sites"].append({
-            "data": site, 
-            "assetfilters": assetfilters,
-            "assets": assets,
-            "beacons": beacons, 
-            "maps": maps, 
-            "psks": psks, 
-            "rssizones":rssizones,
-            "settings": settings,
-            "vbeacons": vbeacons, 
-            "webhooks": webhooks,
-            "wlans": wlans, 
-            "wxrules": wxrules, 
-            "wxtags": wxtags, 
-            "wxtunnels": wxtunnels,
-            "zones": zones
-            })
-        console.info("ORG %s > SITE %s > Backuping map images" %(org_name, site["name"]))
-        for xmap in maps:
-            if 'url' in xmap:
+    _download_obj(mist_lib.requests.sites.assets.get(mist_session, site_id), "assets", "Assets")
+    
+    _download_obj(mist_lib.requests.sites.assetfilters.get(mist_session, site_id), "assetfilters", "Asset Filters")
+
+    _download_obj(mist_lib.requests.sites.beacons.get(mist_session, site_id), "beacons", "Beacons")
+
+    maps = _download_obj(mist_lib.requests.sites.maps.get(mist_session, site_id), "maps", "Maps")
+
+    _download_obj(mist_lib.requests.sites.psks.get(mist_session, site_id), "psks", "PSKs")
+
+    _download_obj(mist_lib.requests.sites.rssizones.get(mist_session, site_id), "rssizones", "RSSI Zones")
+
+    _download_obj(mist_lib.requests.sites.vbeacons.get(mist_session, site_id), "vbeacons", "vBeacons")
+
+    _download_obj(mist_lib.requests.sites.webhooks.get(mist_session, site_id), "webhooks", "Webhooks")
+
+    wlans = _download_obj(mist_lib.requests.sites.wlans.get(mist_session, site_id), "wlans", "WLANs")
+
+    _backup_wlan_portal(org_id, site_id, wlans)
+
+    _download_obj(mist_lib.requests.sites.wxrules.get(mist_session, site_id), "wxrules", "WX Tules")
+
+    _download_obj(mist_lib.requests.sites.wxtags.get(mist_session, site_id), "wxtags", "WX Tags")
+
+    _download_obj(mist_lib.requests.sites.wxtunnels.get(mist_session, site_id), "wxtunnels", "WX Tunnles")
+
+    _download_obj(mist_lib.requests.sites.zones.get(mist_session, site_id), "zones", "Zones")
+
+    if "rftemplate_id" in info and info["rftemplate_id"]:
+        _download_obj(mist_lib.requests.orgs.rftemplates.get_by_id(mist_session, org_id, info["rftemplate_id"]), "rftemplates", "RF Template")
+        
+    if "secpolicy_id" in info and info["secpolicy_id"]:
+        _download_obj(mist_lib.requests.orgs.secpolicies.get_by_id(mist_session, org_id, info["secpolicy_id"]), "secpolicies", "Security Policy")
+
+    if "alarmtemplate_id" in info and info["alarmtemplate_id"]:
+        _download_obj(mist_lib.requests.orgs.alarmtemplates.get_by_id(mist_session, org_id, info["alarmtemplate_id"]), "alarmtemplates", "Alarm Template")
+
+    if "networktemplate_id" in info and info["networktemplate_id"]:
+        _download_obj(mist_lib.requests.orgs.networktemplates.get_by_id(mist_session, org_id, info["networktemplate_id"]), "networktemplate", "Network Tempalte")
+
+    if "sitegroup_ids" in info and info["sitegroup_ids"]:
+        sitegroup_names = [] 
+        for sitegroup_id in info["sitegroup_ids"]:
+            sitegroup_info = mist_lib.requests.orgs.sitegroups.get_by_id(mist_session, org_id, sitegroup_id)["result"]
+            if "name" in sitegroup_info:
+                sitegroup_names.append(sitegroup_info["name"])
+        
+
+    for xmap in maps:
+        if 'url' in xmap:
+            print("Downloading image for map {0} ".format(xmap["name"]).ljust(79, "."), end="", flush=True) 
+            try:           
                 url = xmap["url"]
                 image_name = "%s_org_%s_site_%s_map_%s.png" %(file_prefix, org_id, site["id"], xmap["id"])
                 urllib.request.urlretrieve(url, image_name)
         console.notice("ORG %s > SITE %s > Backup done" %(org_name, site["name"]))
 
-    console.notice("ORG %s > Backup done" %(org_name))
-    return backup
+    
 
 def _save_to_file(backup_file, backup):
     print("saving to file...")
@@ -171,8 +160,17 @@ def start_org_backup(mist_session, org_id, org_name):
     backup = _backup_full_org(mist_session, org_id, org_name)
     _save_to_file(backup_file, backup)
     
-    #except:
-     #   return 255
+    for site_id in site_ids:
+        site_name = mist_lib.sites.info.get(mist_session, site_id)["result"]["name"]
+        _goto_folder(site_name)
+
+        _backup_site(mist_session, site_id, site_name, org_id)        
+        print()
+        console.info("Backup done for site {0}".format(site_name))
+        print()
+
+        os.chdir("..")
+
 
 
 def start(mist_session):
