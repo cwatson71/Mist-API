@@ -6,6 +6,8 @@ session.py
 *.png
 *.csv
 backup
+site_backup
+org_backup
 rg_conf_file*.json
 org_inventory_file.json
 
