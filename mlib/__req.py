@@ -36,9 +36,13 @@ class Req:
             logging.debug("Response: {0}".format(error))
         return {"result": result, "status_code": resp.status_code, "error": error, "uri":uri}
 
-    def mist_get(self, uri, org_id="", site_id="", query={}, page=None, limit=None):
+    def mist_get(self, uri, query={}, page=None, limit=None):
         """GET HTTP Request
-        Params: uri, HTTP query
+        Params: 
+            uri: String (ex: /api/v1/self)
+            query: Dict (HTTP Query)
+            page: Int (pagination page)
+            limit: Int (pagination limit)
         Return: HTTP response"""
         try:
             url = self._url(uri)
@@ -64,14 +68,16 @@ class Req:
                 x_page_page = int(resp.headers["X-Page-Page"])
                 x_page_total = int(resp.headers["X-Page-Total"])
                 if x_page_limit * x_page_page < x_page_total:
-                    content+=self.mist_get(uri, org_id, site_id, query, page + 1, limit)["result"]
+                    content+=self.mist_get(uri, query, page + 1, limit)["result"]
                 return self._response(resp, uri, content)
             else:                
                 return self._response(resp, uri)
 
-    def mist_post(self, uri, org_id="", site_id="", body={}):
+    def mist_post(self, uri, body={}):
         """POST HTTP Request
-        Params: uri, HTTP body
+        Params: 
+            uri: String (ex: /api/v1/self)
+            body: Dict (HTTP Body)
         Return: HTTP response"""
         try: 
             url = self._url(uri)
@@ -93,9 +99,11 @@ class Req:
         else: 
             return self._response(resp, uri)
 
-    def mist_put(self, uri, org_id="", site_id="", body={}):
+    def mist_put(self, uri, body={}):
         """PUT HTTP Request
-        Params: uri, HTTP body
+        Params: 
+            uri: String (ex: /api/v1/self)
+            body: Dict (HTTP Body)
         Return: HTTP response"""
         try:
             url = self._url(uri)
@@ -117,9 +125,10 @@ class Req:
             return self._response(resp, uri)
 
 
-    def mist_delete(self, uri, org_id="", site_id=""):
+    def mist_delete(self, uri):
         """DELETE HTTP Request
-        Params: uri
+        Params: 
+            uri: String (ex: /api/v1/self)
         Return: HTTP response"""
         try: 
             url = self._url(uri)
@@ -134,9 +143,11 @@ class Req:
             return self._response(resp, uri)
 
 
-    def mist_post_file(self, uri, org_id="", site_id="", files=None):
-        """POST HTTP Request
-        Params: uri, HTTP body
+    def mist_post_file(self, uri, files=None):
+        """POST HTTP Request with file
+        Params: 
+            uri: String (ex: /api/v1/self)
+            files: String (path to the files)
         Return: HTTP response"""
         try:                 
             url = self._url(uri)
