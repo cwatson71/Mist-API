@@ -1,7 +1,7 @@
 
 def create(mist_session, site_id, psk):
     uri = "/api/v1/sites/%s/psks" % site_id
-    resp = mist_session.mist_post(uri, site_id=site_id, body=psk)
+    resp = mist_session.mist_post(uri, body=psk)
     return resp
 
 
@@ -14,7 +14,7 @@ def get(mist_session, site_id, psk_id="", name="", ssid="", page=1, limit=100):
         query["name"] = name
     if  ssid != "":
         query["ssid"] = ssid
-    resp = mist_session.mist_get(uri, site_id=site_id, query=query, page=page, limit=limit)
+    resp = mist_session.mist_get(uri, query=query, page=page, limit=limit)
     return resp 
 
 def delete(mist_session, site_id, psk_id="", name="", ssid=""):
@@ -27,5 +27,5 @@ def delete(mist_session, site_id, psk_id="", name="", ssid=""):
         uri += "?name=%s" % name
     elif  ssid != "":
         uri += "?ssid=%s" % ssid
-    resp = mist_session.mist_delete(uri, site_id=site_id)
+    resp = mist_session.mist_delete(uri)
     return resp 
