@@ -2,7 +2,7 @@
 Written by: Thomas Munzer (tmunzer@juniper.net)
 Github repository: https://github.com/tmunzer/Mist_library/
 '''
-
+import logging
 import requests
 import json
 import weakref
@@ -10,16 +10,6 @@ from getpass import getpass
 
 from .__req import Req
 from .models.privilege import Privileges
-
-
-try:
-    from config import log_level
-except:
-    log_level = 6
-finally:
-    from .__debug import Console
-    console = Console(log_level)
-    
 
 clouds = [
     {
@@ -44,7 +34,12 @@ clouds = [
 class Mist_Session(Req):
     """Class managing REST login and requests"""
 
-    def __init__(self, session_file=None, load_settings=True, email="", password="", apitoken=None, host=None):    
+    def __init__(self, host=None, email="", password="", apitoken=None, session_file=None, load_settings=True, auto_login=True):    
+        """
+        Initialize the Mist session, and validate the credentials. The session information can be passed as parameters, 
+        loaded from the config file, or loaded from a saved session.
+        Parameters: host
+        """
 
         # user and https session parameters
         self.host = host
@@ -60,18 +55,42 @@ class Mist_Session(Req):
         self.authenticated = False
         self.session = requests.session()
         self.csrftoken = ""
-        self.apitoken = apitoken
-        #Try to log in
+        self.apitoken = apitoken      
         if session_file != None:
-            self._restore_session(session_file)
+            self._restore_session(session_file)  
         if self.authenticated == False:
-            self._credentials(load_settings)
-        # if successfuly authenticated
-        if (self.get_authenticated()): self.getself()
+            self._set_credentials(load_settings)
+        #Try to log in
+        if (auto_login): self.login()
+
+
+    def login(self): 
+        if self.email and self.password:
+            logging.info("Login/Pwd authentication used")
+            uri = "/api/v1/login"
+            body = {
+                "email": self.email,
+                "password": self.password
+            }
+            resp = self.session.post(self._url(uri), json=body)
+            if resp.status_code == 200:
+                logging.info("authenticated")
+                self._set_session(True)
+            elif resp.status_code == 400:
+                logging.error("not authenticated: {0}".format(resp.json["detail"]))
+                return False
+            else:
+                try:
+                    logging.error(resp.json()["detail"])
+                except:
+                    logging.error(resp.text)
+                return False
+        # if successfuly authenticated or API Token used
+        if (self.get_auth_status()): 
+            self.getself() 
         # if authentication failed, exit with error code 255
         else:
-            console.alert("Authentication failed... Exiting...") 
-            exit(255)
+            logging.error("Authentication failed... Exiting...") 
 
     def __str__(self):
         fields = ["email", "first_name", "last_name", "phone", "via_sso",
@@ -79,22 +98,22 @@ class Mist_Session(Req):
         string = ""
         for field in fields:
             if hasattr(self, field) and getattr(self, field) != "":
-                string += "%s:\r\n" % field
+                string += "{0}:\r\n".format(field)
                 if field == "privileges":
                     string += Privileges(self.privileges).display()
                     string += "\r\n"
                 elif field == "tags":
                     for tag in self.tags:
-                        string += "  -  %s\r\n" % tag
+                        string += "  -  {0}\r\n".format(tag)
                 elif field == "authenticated":
-                    string += "%s\r\n" % self.get_authenticated()
+                    string += "{0}\r\n".format(self.get_auth_status())
                 else:
-                    string += "%s\r\n" % (getattr(self, field))
+                    string += "{0}\r\n".format(getattr(self, field))
                 string += "\r\n"
         return string
 
     def _restore_session(self, file):                
-        console.info("Restoring session...")
+        logging.info("Loading session...")
         try:
             with open(file, 'r') as f:
                 for line in f:
@@ -105,17 +124,11 @@ class Mist_Session(Req):
                         self.session.cookies.set(**cookie)
                     elif "host" in line:
                         self.host = line["host"]
-            console.info("Session restored.")
-            console.debug("Cookies > %s" % self.session.cookies)
-            console.debug("Host > %s" % self.host) 
-            self._set_authenticated(True)
-            valid = self.getself()
-            if valid == False:
-                console.error("Session expired...")
-                self._set_authenticated(False)
-
+            logging.info("Session restored.")
+            logging.debug("Cookies > {0}".format(self.session.cookies))
+            logging.debug("Host > {0}".format(self.host))
         except:
-            console.error("Unable to load session...")      
+            logging.error("Unable to load session...")      
 
     def _select_cloud(self):
         loop = True
@@ -124,9 +137,9 @@ class Mist_Session(Req):
             i=0
             print("\r\nAvailable Clouds:")
             for cloud in clouds:
-                print("%s) %s (host: %s)" % (i, cloud["short"], cloud["host"]))
+                print("{0}) {1} (host: {2})".format(i, cloud["short"], cloud["host"]))
                 i+=1
-            resp = input("\r\nSelect a Cloud (0 to %s, or q to exit): " %i)
+            resp = input("\r\nSelect a Cloud (0 to {0}, or q to exit): ".format(i))
             if resp == "q":
                 exit(0)    
             elif resp == "i":
@@ -134,88 +147,56 @@ class Mist_Session(Req):
             else:
                 try:
                     resp_num = int(resp)
-                    if resp_num >= 0 and resp_num <= i:
-                        return clouds[resp_num]["host"]                        
+                    if resp_num >= 0 and resp_num <= i:                   
                         loop = False
+                        return clouds[resp_num]["host"]     
                     else:
-                        print("Please enter a number between 0 and %s." %i)
+                        print("Please enter a number between 0 and {0}.".format(i))
                 except:
                     print("Please enter a number.")
 
-    def _credentials(self, load_settings=True):
+    def _set_credentials(self, load_settings=True):
         self.session = requests.session()
-        try:
-            if not load_settings:
-                if not self.host: self.host = self._select_cloud()
-                if not self.email: self.email = input("Login: ")
-                if not self.password: self.password = getpass("Password: ")
-            else:
+        if load_settings:
+            try:
                 from config import credentials
-                console.notice("Login file found.")
-                if "host" in credentials: self.host = credentials["host"]
-                else: self.host = self._select_cloud()
+                logging.info("Configuration file found.")
+                self.host = credentials["host"] if "host" in credentials else self._select_cloud()
                 if "apitoken" in credentials: self._set_apitoken(credentials["apitoken"])
                 elif "email" in credentials: 
                     self.email = credentials["email"]
-                    if "password" in credentials:
-                            self.password = credentials["password"]
-                    else: 
-                        self.password = getpass("Password:")
+                    self.password = credentials["password"] if "password" in credentials else getpass("Password:")
                 else:
-                    console.error("Credentials invalid... Can't use the information from config.py...")
+                    logging.error("Credentials invalid... Can't use the information from config.py...")
                     raise ValueError            
-        except:
-            console.notice("No login file found. Asking for credentials")
-            if not self.host: self.host = self._select_cloud()
+            except:
+                logging.info("Unable to load the configuration file. Asking for Login/Password")
+        if not self.host: self.host = self._select_cloud()
+        if not self.apitoken and not self.email:
             self.email = input("Login: ")
+        if self.email and not self.password:
             self.password = getpass("Password: ")
-        finally:
-            if self.host == "":
-                self.host = self._select_cloud()
-            if self.email != "" and self.password != "":
-                self._set_login_password()
 
 
     def _set_apitoken(self, apitoken):
-        console.notice("API Token authentication used")
+        logging.info("API Token authentication used")
         self.apitoken = apitoken
         self.session.headers.update({'Authorization': "Token " + apitoken})
 
-    def _set_login_password(self):
-        """Function to authenticate a user. Will create and store a session used by other requests
-        Params: email, password
-        return: nothing"""
-        console.debug("Credentials authentication used")
-        uri = "/api/v1/login"
-        body = {
-            "email": self.email,
-            "password": self.password
-        }
-        resp = self.session.post(self._url(uri), json=body)
-        if resp.status_code == 200:
-            console.notice("authenticated")
-            self._set_authenticated(True)
-        elif resp.status_code == 400:
-            console.error("not authenticated: " + resp.json["detail"])
-        else:
-            try:
-                console.error(resp.json()["detail"])
-            except:
-                console.error(resp.text)
 
     def logout(self):
         uri = "/api/v1/logout"
         resp = self.mist_post(uri)
         if resp['status_code'] == 200:
-            console.warning("Logged out")
-            self._set_authenticated(False)
+            logging.warning("Logged out")
+            self._set_session(False)
         else:
             try:
-                console.error(resp.json()["detail"])
+                logging.error(resp.json()["detail"])
             except:
-                console.error(resp.text)
+                logging.error(resp.text)
 
-    def _set_authenticated(self, value):
+    def _set_session(self, value):
         if value == True:
             self.authenticated = True
             if not self.apitoken:
@@ -230,25 +211,29 @@ class Mist_Session(Req):
             self.csrftoken = ""
             del self.session
 
-    def get_authenticated(self):
+    def get_auth_status(self):
+        """
+        Return the current authentication status.
+        Return True if login/pwd session is established or API Token is used
+        """
         return self.authenticated or self.apitoken != None
 
-    def list_api_token(self):
-        uri = "https://%s/api/v1/self/apitokens" % self.host
+    def get_api_tokens(self):
+        uri = "https://{0}/api/v1/self/apitokens".format(self.host)
         resp = self.session.get(uri)
         return resp
 
     def create_api_token(self):
-        uri = "https://%s/api/v1/self/apitokens" % self.host
+        uri = "https://{0}/api/v1/self/apitokens".format(self.host)
         resp = self.session.post(uri)
         return resp
 
     def delete_api_token(self, token_id):
-        uri = "https://%s/api/v1/self/apitokens/%s" % (self.host, token_id)
+        uri = "https://{0}/api/v1/self/apitokens/{1}".format(self.host, token_id)
         resp = self.session.delete(uri)
         return resp
 
-    def two_factor_authentication(self, two_factor):
+    def _two_factor_authentication(self, two_factor):
         uri = "/api/v1/login"
         body = {
             "email": self.email,
@@ -257,26 +242,26 @@ class Mist_Session(Req):
         }
         resp = self.session.post(self._url(uri), json=body)
         if resp.status_code == 200:
-            console.notice("2FA authentication successed")
-            self._set_authenticated(True)
+            logging.info("2FA authentication successed")
+            self._set_session(True)
             return True
         else:
-            console.error("2FA authentication failed")
-            console.error("Error code: %s" % resp.status_code)
+            logging.error("2FA authentication failed")
+            logging.error("Error code: {0}".format(resp.status_code))
             exit(255)
             return False
 
-    def two_factor_authentication_token(self, two_factor):        
+    def _two_factor_authentication_token(self, two_factor):        
         uri = "/api/v1/login/two_factor"
         body = { "two_factor": two_factor }
         resp = self.session.post(self._url(uri), json=body)
         if resp.status_code == 200:
-            console.notice("2FA authentication successed")
-            self._set_authenticated(True)
+            logging.info("2FA authentication successed")
+            self._set_session(True)
             return True
         else:
-            console.error("2FA authentication failed")
-            console.error("Error code: %s" % resp.status_code)
+            logging.error("2FA authentication failed")
+            logging.error("Error code: {0}".format(resp.status_code))
             exit(255)
             return False        
     
@@ -296,9 +281,9 @@ class Mist_Session(Req):
             ):
                 two_factor = input("Two Factor Authentication code:")
                 if (self.apitoken):
-                    if (self.two_factor_authentication_token(two_factor) == True):
+                    if (self._two_factor_authentication_token(two_factor) == True):
                         self.getself()
-                elif (self.two_factor_authentication(two_factor) == True):
+                elif (self._two_factor_authentication(two_factor) == True):
                     self.getself()
             # Get details of the account 
             else:
@@ -312,31 +297,27 @@ class Mist_Session(Req):
                         setattr(self, key, val)
                 return True
         else:
-            console.error("Authentication not valid...")
+            logging.error("Authentication not valid...")
             print()
-            resp = input("Do you want to try with new credentials for %s (y/N)? " %(self.host))
+            resp = input("Do you want to try with new credentials for {0} (y/N)? ".format(self.host))
             if resp.lower() == "y":
-                self._credentials(load_settings=False)
+                self._set_credentials(load_settings=False)
                 return self.getself()
             else:
                 exit(0)
 
-    def save(self, file_path="./session.py"):
+    def save_session(self, file_path="./session.py"):
         if self.apitoken != None:
-            console.error("API Token used. There is no cookies to save...")
+            logging.error("API Token used. There is no cookies to save...")
         else:
-            console.warning("This will save in clear text your session cookies!")
+            logging.warning("This will save in clear text your session cookies!")
             sure = input("Are you sure? (y/N)")
             if sure.lower() == "y":
                 with open(file_path, 'w') as f:
                     for cookie in self.session.cookies:
                         cookie_json = json.dumps({"cookie":{"domain": cookie.domain, "name": cookie.name, "value": cookie.value}})
-                        f.write("%s\r\n" % cookie_json)
+                        f.write("{0}\r\n".format(cookie_json))
                     host = json.dumps({"host": self.host})
-                    f.write("%s\r\n" % host)
-                console.info("session saved.")
-
-def disp(data):
-    print(json.dumps(data, sort_keys=True, indent=4, separators=(',', ': ')))
-
+                    f.write("{0}\r\n".format(host))
+                logging.info("session saved.")
 
