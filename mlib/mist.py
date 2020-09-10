@@ -32,21 +32,20 @@ clouds = [
 #### PARAMETERS #####
 
 class Mist_Session(Req):
-    """Class managing REST login and requests"""
+    """
+    Initialize the Mist session, and validate the credentials. The session information can be passed as parameters, 
+    loaded from the config file, or loaded from a saved session.
+    Parameters: 
+        host: String (api.mist.com, api.eu.mist.com, ...)
+        email: String (user email for authentication)
+        password: String (user password to be used with the email address)
+        apitoken: String (apitoken for authentication, instead of login/pwd)
+        session_file: String (file containing a previous saved session)
+        load_settings: Boolean (if the script has to try to load configuration file. Only used if host and email/pwd or apitoken are not specified)
+        auto_login: Boolean (if the script has to validate the credentials automatically)
+    """
 
-    def __init__(self, host=None, email="", password="", apitoken=None, session_file=None, load_settings=True, auto_login=True):    
-        """
-        Initialize the Mist session, and validate the credentials. The session information can be passed as parameters, 
-        loaded from the config file, or loaded from a saved session.
-        Parameters: 
-            host: String (api.mist.com, api.eu.mist.com, ...)
-            email: String (user email for authentication)
-            password: String (user password to be used with the email address)
-            apitoken: String (apitoken for authentication, instead of login/pwd)
-            session_file: String (file containing a previous saved session)
-            load_settings: Boolean (if the script has to try to load configuration file)
-            auto_login: Boolean (if the script has to validate the credentials automatically)
-        """
+    def __init__(self, host=None, email="", password="", apitoken=None, session_file=None, load_settings=True, auto_login=True):   
 
         # user and https session parameters
         self.host = host
@@ -66,12 +65,15 @@ class Mist_Session(Req):
         if session_file != None:
             self._restore_session(session_file)  
         if self.authenticated == False:
-            self.create_session(load_settings)
+            self._create_session(load_settings)
         #Try to log in
         if (auto_login): self.login()
 
 
     def login(self): 
+        """
+        Required when "auto_login=False" is used. Will validate the credentials and retrieve the session cookies when login/pwd is used.
+        """
         if self.email and self.password:
             logging.info("Login/Pwd authentication used")
             uri = "/api/v1/login"
@@ -88,16 +90,33 @@ class Mist_Session(Req):
                 return False
             else:
                 try:
-                    logging.error(resp.json()["detail"])
+                    logging.error(resp.json["detail"])
                 except:
                     logging.error(resp.text)
-                return False
+                finally:
+                    return False
         # if successfuly authenticated or API Token used
         if (self.get_auth_status()): 
             self.getself() 
         # if authentication failed, exit with error code 255
         else:
             logging.error("Authentication failed... Exiting...") 
+
+
+    def logout(self):
+        """
+        Logout from the Mist Cloud. This will mainly clear the session information.
+        """
+        uri = "/api/v1/logout"
+        resp = self.mist_post(uri)
+        if resp['status_code'] == 200:
+            logging.warning("Logged out")
+            self._set_session(False)
+        else:
+            try:
+                logging.error(resp.json()["detail"])
+            except:
+                logging.error(resp.text)
 
     def __str__(self):
         fields = ["email", "first_name", "last_name", "phone", "via_sso",
@@ -135,7 +154,7 @@ class Mist_Session(Req):
             logging.debug("Cookies > {0}".format(self.session.cookies))
             logging.debug("Host > {0}".format(self.host))
         except:
-            logging.warn("Unable to load session...")      
+            logging.warning("Unable to load session...")      
 
     def _select_cloud(self):
         loop = True
@@ -162,9 +181,9 @@ class Mist_Session(Req):
                 except:
                     print("Please enter a number.")
 
-    def create_session(self, load_settings=True):
+    def _create_session(self, load_settings=True):
         self.session = requests.session()
-        if load_settings and not self.host and not ((self.email and self.password) or self.apitoken) :
+        if load_settings and not(self.host and ((self.email and self.password) or self.apitoken)) :
             try:
                 from config import credentials
                 logging.info("Configuration file found.")
@@ -192,17 +211,6 @@ class Mist_Session(Req):
         self.session.headers.update({'Authorization': "Token " + apitoken})
 
 
-    def logout(self):
-        uri = "/api/v1/logout"
-        resp = self.mist_post(uri)
-        if resp['status_code'] == 200:
-            logging.warning("Logged out")
-            self._set_session(False)
-        else:
-            try:
-                logging.error(resp.json()["detail"])
-            except:
-                logging.error(resp.text)
 
     def _set_session(self, value):
         if value == True:
@@ -227,16 +235,27 @@ class Mist_Session(Req):
         return self.authenticated or self.apitoken != None
 
     def get_api_tokens(self):
+        """ 
+        Retrieve the user's API token from the Mist Cloud
+        """
         uri = "https://{0}/api/v1/self/apitokens".format(self.host)
         resp = self.session.get(uri)
         return resp
 
     def create_api_token(self):
+        """
+        Create a new API token for the current user
+        """
         uri = "https://{0}/api/v1/self/apitokens".format(self.host)
         resp = self.session.post(uri)
         return resp
 
     def delete_api_token(self, token_id):
+        """
+        Delete the specified user's API token from the Mist Cloud
+        parameter:
+            token_id: String (ID of the API token to remove. can be retrieved with get_api_tokens() function)
+        """
         uri = "https://{0}/api/v1/self/apitokens/{1}".format(self.host, token_id)
         resp = self.session.delete(uri)
         return resp
@@ -256,7 +275,6 @@ class Mist_Session(Req):
         else:
             logging.error("2FA authentication failed")
             logging.error("Error code: {0}".format(resp.status_code))
-            exit(255)
             return False
 
     def _two_factor_authentication_token(self, two_factor):        
@@ -274,9 +292,11 @@ class Mist_Session(Req):
             return False        
     
     def getself(self):
-        """Retrieve information about the current user and store them in the current object.
-        Params: password (optional. Only needed for 2FA processing)
-        Return: none"""
+        """
+        Retrieve information about the current user and store them in the current object.
+        Params: none
+        Return: none
+        """
         uri = "/api/v1/self"
         resp = self.mist_get(uri)
         if resp != None and 'result' in resp:
@@ -306,15 +326,20 @@ class Mist_Session(Req):
                 return True
         else:
             logging.error("Authentication not valid...")
-            print()
             resp = input("Do you want to try with new credentials for {0} (y/N)? ".format(self.host))
             if resp.lower() == "y":
-                self.create_session(load_settings=False)
+                self._create_session(load_settings=False)
                 return self.getself()
             else:
                 exit(0)
 
     def save_session(self, file_path="./session.py"):
+        """
+        Save the current session cookies to a file. Can be loaded afterward. 
+        Only useful with login/pwd 
+        parameter:
+            file_path: String (path to the file where to store the session)
+        """
         if self.apitoken != None:
             logging.error("API Token used. There is no cookies to save...")
         else:
