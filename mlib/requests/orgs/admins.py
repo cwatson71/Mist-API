@@ -2,7 +2,7 @@
 
 def get(mist_session, org_id):
     uri = "/api/v1/orgs/%s/admins" % org_id
-    resp = mist_session.mist_get(uri, org_id=org_id)
+    resp = mist_session.mist_get(uri)
     return resp
 
 def update(mist_session, org_id, admin_id, privileges=""):
@@ -10,7 +10,7 @@ def update(mist_session, org_id, admin_id, privileges=""):
     body = {}
     if privileges != "":
         body["privileges"] = privileges
-    resp = mist_session.mist_put(uri, org_id=org_id, body=body)
+    resp = mist_session.mist_put(uri, body=body)
     return resp
 
 def revoke(mist_session, org_id, admin_id):
@@ -27,7 +27,7 @@ def create_invite(mist_session, org_id, email, privileges, first_name = "", last
         "hours": hours,
         "privileges": privileges
     }
-    resp = mist_session.mist_post(uri, org_id=org_id, body=body)
+    resp = mist_session.mist_post(uri, body=body)
     return resp
 
 def delete_invite(mist_session, org_id, invite_id):
@@ -48,7 +48,7 @@ def update_invite(mist_session, org_id, invite_id, email = "", privileges = "", 
         body["hours"] = hours
     if privileges != "":
         body["privileges"] = privileges
-    resp = mist_session.mist_put(uri, org_id=org_id, body=body)
+    resp = mist_session.mist_put(uri, body=body)
     return resp
 
 

@@ -2,35 +2,35 @@ from . import templates
 
 def get(mist_session, org_id, page=1, limit=100):
     uri = "/api/v1/orgs/%s/wlans" % org_id
-    resp = mist_session.mist_get(uri, org_id=org_id, page=page, limit=limit)
+    resp = mist_session.mist_get(uri, page=page, limit=limit)
     return resp
 
 
 def create(mist_session, org_id, wlan_settings):
     uri = "/api/v1/orgs/%s/wlans" % org_id
-    resp = mist_session.mist_post(uri, org_id=org_id, body=wlan_settings)
+    resp = mist_session.mist_post(uri, body=wlan_settings)
     return resp
 
 def delete(mist_session, org_id, wlan_id):
     uri = "/api/v1/orgs/%s/wlans/%s" % (org_id, wlan_id)
-    resp = mist_session.mist_delete(uri, org_id=org_id)
+    resp = mist_session.mist_delete(uri)
     return resp
 
 def add_portal_image(mist_session, org_id, wlan_id, image_path):
     uri = "/api/v1/orgs/%s/wlans/%s/portal_image" %(org_id, wlan_id)
     files = {'file': open(image_path, 'rb').read()}
-    resp = mist_session.mist_post_file(uri, org_id=org_id, files=files)
+    resp = mist_session.mist_post_file(uri, files=files)
     return resp
 
 def delete_portal_image(mist_session, org_id, wlan_id):
     uri = "/api/v1/orgs/%s/wlans/%s/portal_image" %(org_id, wlan_id)
-    resp = mist_session.mist_delete(uri, org_id=org_id)
+    resp = mist_session.mist_delete(uri)
     return resp
 
 def set_portal_template(mist_session, org_id, wlan_id, portal_template_body):
     uri = "/api/v1/orgs/%s/wlans/%s/portal_template" %(org_id, wlan_id)
     body = portal_template_body
-    resp = mist_session.mist_put(uri, org_id=org_id, body=body)
+    resp = mist_session.mist_put(uri, body=body)
     return resp
 
 
@@ -40,6 +40,7 @@ def report(mist_session, org_id, fields):
     result = []
     for wlan in wlans['result']:
         template = templates.get_details(mist_session, org_id, wlan["template_id"])['result']
+        # TODO: deals with sitegroups
         if "applies" in template and "site_ids" in template["applies"]:
             temp = []
             for field in fields:
@@ -91,5 +92,5 @@ def report(mist_session, org_id, fields):
                     temp.append("%s" % wlan[field])
             
             for site_id in template["applies"]["site_ids"]:                        
-                    result.append([ site_id ] + temp)
+                result.append([ site_id ] + temp)
     return result
