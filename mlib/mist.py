@@ -38,7 +38,14 @@ class Mist_Session(Req):
         """
         Initialize the Mist session, and validate the credentials. The session information can be passed as parameters, 
         loaded from the config file, or loaded from a saved session.
-        Parameters: host
+        Parameters: 
+            host: String (api.mist.com, api.eu.mist.com, ...)
+            email: String (user email for authentication)
+            password: String (user password to be used with the email address)
+            apitoken: String (apitoken for authentication, instead of login/pwd)
+            session_file: String (file containing a previous saved session)
+            load_settings: Boolean (if the script has to try to load configuration file)
+            auto_login: Boolean (if the script has to validate the credentials automatically)
         """
 
         # user and https session parameters
@@ -55,11 +62,11 @@ class Mist_Session(Req):
         self.authenticated = False
         self.session = requests.session()
         self.csrftoken = ""
-        self.apitoken = apitoken      
+        self.apitoken = apitoken  
         if session_file != None:
             self._restore_session(session_file)  
         if self.authenticated == False:
-            self._set_credentials(load_settings)
+            self.create_session(load_settings)
         #Try to log in
         if (auto_login): self.login()
 
@@ -113,7 +120,7 @@ class Mist_Session(Req):
         return string
 
     def _restore_session(self, file):                
-        logging.info("Loading session...")
+        logging.debug("Loading session...")
         try:
             with open(file, 'r') as f:
                 for line in f:
@@ -124,11 +131,11 @@ class Mist_Session(Req):
                         self.session.cookies.set(**cookie)
                     elif "host" in line:
                         self.host = line["host"]
-            logging.info("Session restored.")
+            logging.info("Session restored from file {0}".format(file))
             logging.debug("Cookies > {0}".format(self.session.cookies))
             logging.debug("Host > {0}".format(self.host))
         except:
-            logging.error("Unable to load session...")      
+            logging.warn("Unable to load session...")      
 
     def _select_cloud(self):
         loop = True
@@ -155,9 +162,9 @@ class Mist_Session(Req):
                 except:
                     print("Please enter a number.")
 
-    def _set_credentials(self, load_settings=True):
+    def create_session(self, load_settings=True):
         self.session = requests.session()
-        if load_settings:
+        if load_settings and not self.host and not ((self.email and self.password) or self.apitoken) :
             try:
                 from config import credentials
                 logging.info("Configuration file found.")
@@ -171,7 +178,8 @@ class Mist_Session(Req):
                     raise ValueError            
             except:
                 logging.info("Unable to load the configuration file. Asking for Login/Password")
-        if not self.host: self.host = self._select_cloud()
+        if not self.host: 
+            self.host = self._select_cloud()
         if not self.apitoken and not self.email:
             self.email = input("Login: ")
         if self.email and not self.password:
@@ -301,7 +309,7 @@ class Mist_Session(Req):
             print()
             resp = input("Do you want to try with new credentials for {0} (y/N)? ".format(self.host))
             if resp.lower() == "y":
-                self._set_credentials(load_settings=False)
+                self.create_session(load_settings=False)
                 return self.getself()
             else:
                 exit(0)
