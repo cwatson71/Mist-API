@@ -1,9 +1,7 @@
-
 def create(mist_session, data):
     uri = "/api/v1/orgs"
     resp = mist_session.mist_post(uri, body=data)
     return resp
-
 
 def update(mist_session, org_id, data):
     uri = "/api/v1/orgs/{0}".format(org_id)
@@ -34,3 +32,6 @@ def clone(mist_session, org_id, new_name):
     uri = "/api/v1/orgs/{0}/clone"
     resp = mist_session.mist_post(uri, body={"name": new_name})
     return resp
+
+def admins():
+    from .admins import Admin

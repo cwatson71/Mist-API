@@ -11,6 +11,9 @@ from getpass import getpass
 from .__req import Req
 from .models.privilege import Privileges
 
+from .requests import orgs, sites
+
+
 clouds = [
     {
         "short": "US", 

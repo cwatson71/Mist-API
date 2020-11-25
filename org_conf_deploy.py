@@ -32,7 +32,6 @@ org_id = ""
 import mlib as mist_lib
 from mlib.__debug import Console
 from mlib import cli
-from tabulate import tabulate
 import json
 import os.path
 
